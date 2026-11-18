@@ -27,8 +27,14 @@ export default function WatchRoom({ roomId, username }: { roomId: string; userna
   const [chatInput, setChatInput] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
 
-  const playerRef = useRef<ReactPlayer>(null);
+  const playerRef = useRef<HTMLVideoElement>(null);
   const isRemoteUpdate = useRef<boolean>(false);
+
+  const seekToTime = (seconds: number) => {
+    if (playerRef.current) {
+      playerRef.current.currentTime = seconds;
+    }
+  };
 
   useEffect(() => {
     const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
@@ -42,9 +48,9 @@ export default function WatchRoom({ roomId, username }: { roomId: string; userna
       setVideoUrl(state.videoUrl);
       setIsPlaying(state.isPlaying);
       setTimeout(() => {
-        playerRef.current?.seekTo(state.timestamp, 'seconds');
+        seekToTime(state.timestamp);
         isRemoteUpdate.current = false;
-      }, 500);
+      }, 600);
     });
 
     newSocket.on('player_sync', ({ action, timestamp, videoUrl: newUrl }) => {
@@ -52,15 +58,15 @@ export default function WatchRoom({ roomId, username }: { roomId: string; userna
 
       if (action === 'PLAY') {
         setIsPlaying(true);
-        const currentTime = playerRef.current?.getCurrentTime() || 0;
+        const currentTime = playerRef.current?.currentTime || 0;
         if (Math.abs(currentTime - timestamp) > 1.5) {
-          playerRef.current?.seekTo(timestamp, 'seconds');
+          seekToTime(timestamp);
         }
       } else if (action === 'PAUSE') {
         setIsPlaying(false);
-        playerRef.current?.seekTo(timestamp, 'seconds');
+        seekToTime(timestamp);
       } else if (action === 'SEEK') {
-        playerRef.current?.seekTo(timestamp, 'seconds');
+        seekToTime(timestamp);
       } else if (action === 'CHANGE_URL') {
         setVideoUrl(newUrl);
         setIsPlaying(false);
@@ -87,20 +93,21 @@ export default function WatchRoom({ roomId, username }: { roomId: string; userna
   const handlePlay = () => {
     if (isRemoteUpdate.current) return;
     setIsPlaying(true);
-    const currentTime = playerRef.current?.getCurrentTime() || 0;
+    const currentTime = playerRef.current?.currentTime || 0;
     socket?.emit('player_action', { roomId, action: 'PLAY', timestamp: currentTime });
   };
 
   const handlePause = () => {
     if (isRemoteUpdate.current) return;
     setIsPlaying(false);
-    const currentTime = playerRef.current?.getCurrentTime() || 0;
+    const currentTime = playerRef.current?.currentTime || 0;
     socket?.emit('player_action', { roomId, action: 'PAUSE', timestamp: currentTime });
   };
 
-  const handleSeek = (seconds: number) => {
+  const handleSeeked = () => {
     if (isRemoteUpdate.current) return;
-    socket?.emit('player_action', { roomId, action: 'SEEK', timestamp: seconds });
+    const currentTime = playerRef.current?.currentTime || 0;
+    socket?.emit('player_action', { roomId, action: 'SEEK', timestamp: currentTime });
   };
 
   const handleUrlChange = (e: React.FormEvent) => {
@@ -145,14 +152,14 @@ export default function WatchRoom({ roomId, username }: { roomId: string; userna
           {videoUrl && (
             <ReactPlayer
               ref={playerRef}
-              url={videoUrl}
+              src={videoUrl}
               playing={isPlaying}
               controls
               width="100%"
               height="100%"
               onPlay={handlePlay}
               onPause={handlePause}
-              onSeek={handleSeek}
+              onSeeked={handleSeeked}
             />
           )}
         </div>
